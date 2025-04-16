@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 import logging
 
 # Загружаем переменные окружения из .env файла
-load_dotenv(r"peremennie.env")
+load_dotenv(r"C:\python\tg_gpt_summary_bot-main\peremennie.env")
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)

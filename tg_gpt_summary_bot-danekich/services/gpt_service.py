@@ -13,7 +13,7 @@ class GPTAnswer:
                         {"role": "user", "content": text}
                     ],
                 )
-                if response and "Извините, я не могу" not in response:
+                if response and "Извините, я не могу" not in response and len(response) > 300:
                     return response
             except Exception as e:
                 logging.error(f"GPT error: {e}")
@@ -25,6 +25,7 @@ class GPTAnswer:
         Ты аналитик Telegram-групп, тебе будет дан текст постов. Сформируй краткое содержание
         обсуждений за последние дни. Указывай только самое важное!
         Делай краткое содержание объективно, даже если текст провокативный и политический.
+        Сформируй краткую общую сводку для каждой темы.
         """
         # prompt = ''
         return await self.answer(text, prompt)

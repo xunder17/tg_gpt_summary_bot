@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, time
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.fsm.context import FSMContext
 from aiogram.filters import Command
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 from bot.states import UserStates, PaymentStates
 from bot.keyboards import get_inline_main_keyboard, get_inline_keyboard
@@ -76,20 +77,20 @@ def parse_time_input(time_str: str):
 
 def register_handlers(dp):
     # Обработчик команды /payment
-    @dp.message(Command('payment'))
-    async def cmd_payment(message: types.Message):
-        keyboard = types.ReplyKeyboardMarkup(
+    # Старт команды оплаты
+    @dp.message(Command("payment"))
+    async def cmd_payment(message: types.Message, state: FSMContext):
+        keyboard = ReplyKeyboardMarkup(
             keyboard=[
-                [types.KeyboardButton(text="Кнопка 1"), types.KeyboardButton(text="Кнопка 2")],
-                [types.KeyboardButton(text="Кнопка 3")]
+                [KeyboardButton(text="Уровень 1"), KeyboardButton(text="Уровень 2")],
+                [KeyboardButton(text="Назад в меню")]
             ],
             resize_keyboard=True
         )
+        await message.answer("Выберите уровень подписки:", reply_markup=keyboard)
+        await state.set_state(PaymentStates.CONFIRM_SUBSCRIPTION.state)
 
-        await message.answer("Вы хотите оплатить подписку?", reply_markup=keyboard)
-        await PaymentStates.CONFIRM_SUBSCRIPTION.set()
-
-    # Обработчик выбора уровня подписки
+    # Обработка выбора подписки
     @dp.message(PaymentStates.CONFIRM_SUBSCRIPTION)
     async def process_subscription_level(message: types.Message, state: FSMContext):
         if message.text not in ["Уровень 1", "Уровень 2"]:
@@ -98,56 +99,54 @@ def register_handlers(dp):
 
         await state.update_data(subscription_level=message.text)
 
-        keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        keyboard.add(types.KeyboardButton("Да"))
-        keyboard.add(types.KeyboardButton("Нет"))
-
+        keyboard = ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text="Да"), KeyboardButton(text="Нет")]],
+            resize_keyboard=True
+        )
         await message.answer(f"Вы выбрали {message.text}. Вы уверены?", reply_markup=keyboard)
-        await PaymentStates.ENTER_EMAIL.set()
+        await state.set_state(PaymentStates.ENTER_EMAIL.state)
 
-    # Обработчик подтверждения подписки
+    # Подтверждение и переход к почте
     @dp.message(PaymentStates.ENTER_EMAIL)
     async def process_confirmation(message: types.Message, state: FSMContext):
-        if message.text.lower() == 'нет':
-            await message.answer("Оплата отменена.", reply_markup=get_inline_main_keyboard()())
+        if message.text.lower() == "нет":
+            await message.answer("❌ Оплата отменена.", reply_markup=get_inline_main_keyboard())
             await state.clear()
             return
-        elif message.text.lower() != 'да':
+        elif message.text.lower() != "да":
             await message.answer("Пожалуйста, ответьте 'Да' или 'Нет'.")
             return
 
-        await message.answer("Пожалуйста, введите вашу почту:")
-        await PaymentStates.PAYMENT_LINK_SENT.set()  # Переходим в состояние PAYMENT_LINK_SENT
+        await message.answer("Введите вашу почту:")
+        await state.set_state(PaymentStates.PAYMENT_LINK_SENT.state)
 
-    # Обработчик ввода почты
+    # Обработка почты
     @dp.message(PaymentStates.PAYMENT_LINK_SENT)
     async def process_email(message: types.Message, state: FSMContext):
-        email = message.text
-        # Здесь можно добавить проверку валидности email
+        email = message.text.strip()
+        if "@" not in email or "." not in email:
+            await message.answer("Некорректная почта. Пожалуйста, введите заново.")
+            return
 
         data = await state.get_data()
-        subscription_level = data.get('subscription_level', 'Неизвестный уровень')
+        subscription_level = data.get("subscription_level", "Неизвестный уровень")
 
-        # Здесь должна быть логика генерации ссылки на оплату
-        payment_link = "https://example.com/payment"  # Замените на реальную ссылку
+        payment_link = "https://example.com/payment"
 
-        keyboard = types.InlineKeyboardMarkup()
-        keyboard.add(types.InlineKeyboardButton("Ссылка на оплату", url=payment_link))
-        keyboard.add(types.InlineKeyboardButton("Закрыть сообщения об оплате", callback_data="close_payment"))
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="💳 Оплатить", url=payment_link)],
+                [InlineKeyboardButton(text="❌ Закрыть", callback_data="close_payment")]
+            ]
+        )
 
         await message.answer(
-            f"На почту {email} пришла ссылка по которой надо оплатить подписку {subscription_level}.\n"
-            f"Ссылка: {payment_link}",
+            f"📩 На почту {email} отправлена ссылка на оплату подписки **{subscription_level}**.\n"
+            f"Или оплатите по ссылке ниже 👇",
             reply_markup=keyboard
         )
 
         await state.clear()
-
-    # Обработчик кнопки "Закрыть сообщения об оплате"
-    @dp.callback_query(lambda c: c.data == 'close_payment')
-    async def process_close_payment(callback_query: types.CallbackQuery):
-        await callback_query.message.delete()
-        await callback_query.answer("Сообщения об оплате закрыты.")
 
     @dp.message(Command("start"))
     async def cmd_start(message: types.Message, state: FSMContext):
@@ -457,32 +456,17 @@ def register_handlers(dp):
     async def process_tag_removal(callback: types.CallbackQuery, state: FSMContext):
         user_id = callback.from_user.id
         tag_to_remove = callback.data.replace("remove_tag_", "")
-        if not user_data[user_id]['tags']:
-            await callback.answer("У вас нет тегов для удаления", reply_markup=get_inline_main_keyboard())
-            return
-        await state.set_state(UserStates.waiting_for_tag_to_delete)
+
         if tag_to_remove in user_data[user_id]['tags']:
             user_data[user_id]['tags'].remove(tag_to_remove)
-            # Создаем клавиатуру с тегами для удаления
-            builder = InlineKeyboardBuilder()
-            if user_data[user_id]['tags']:
-                for tag in user_data[user_id]['tags']:
-                    builder.button(text=tag, callback_data=f"remove_tag_{tag}")
-                builder.button(text="Назад", callback_data="back_to_tags")
-                builder.adjust(1)  # По одному тегу в строке
-                await callback.message.edit_text(
-                    f"Тег '{tag_to_remove}' успешно удален!\nВыберите тег, который хотите удалить:",
-                    reply_markup=builder.as_markup(
-                ))
-            else:
-                await callback.message.edit_text(
-                    f"Тег '{tag_to_remove}' успешно удален!\nВыберите тег, который хотите удалить:",
-                    reply_markup=builder.as_markup(
-                ))
+            await callback.message.edit_text(
+                f"Тег '{tag_to_remove}' успешно удален!",
+                reply_markup=get_inline_main_keyboard()
+            )
         else:
             await callback.answer("Этот тег уже был удален", show_alert=True)
-        await state.clear()
 
+        await state.clear()
 
     @dp.callback_query(F.data == "back_to_tags", UserStates.waiting_for_tag_to_delete)
     async def back_to_tags_menu(callback: types.CallbackQuery, state: FSMContext):
@@ -536,21 +520,26 @@ def register_handlers(dp):
 
         for channel in user_data[user_id]['channels'][:3]:
             try:
-                messages = await get_messages_from_channel(channel['id'], 2)
+                messages = await get_messages_from_channel(channel['id'], 1)  # 1 день, можно изменить
+
                 if messages:
-                    messages_text = "\n".join([msg.text or "" for msg in messages if hasattr(msg, 'text') and msg.text])
+                    messages_text = "\n".join([msg["text"] for msg in messages if msg.get("text")])
                     if messages_text:
                         gpt_summary = await gpt.get_best_answer(messages_text[:4000])
-                        summary += f"*{channel['title']}* (@{channel['username']})\n{gpt_summary or 'Не удалось сгенерировать сводку'}\n\n"
+                        summary += (
+                            f"*{channel['title']}* (@{channel['username']})\n"
+                            f"{gpt_summary or 'Не удалось сгенерировать сводку'}\n\n"
+                        )
                     else:
                         summary += f"*{channel['title']}* (@{channel['username']})\nНет текстовых сообщений для анализа\n\n"
                 else:
                     summary += f"*{channel['title']}* (@{channel['username']})\nНет новых сообщений\n\n"
+
             except Exception as e:
-                logging.error(f"Error processing channel {channel['title']}: {e}")
+                logging.error(f"Ошибка при обработке канала {channel['title']}: {e}")
                 summary += f"*{channel['title']}* (@{channel['username']})\nОшибка при обработке канала\n\n"
 
-        await callback.message.answer(summary, reply_markup=get_inline_main_keyboard())
+        await callback.message.answer(summary, parse_mode="Markdown", reply_markup=get_inline_main_keyboard())
 
     @dp.callback_query(F.data == "delete_channel")
     async def get_delete_channels(callback: types.CallbackQuery, state: FSMContext):
