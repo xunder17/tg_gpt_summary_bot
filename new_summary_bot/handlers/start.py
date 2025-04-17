@@ -93,7 +93,7 @@ async def show_example_summary_cb(call: CallbackQuery, state: FSMContext):
     """
     now_utc = datetime.utcnow()
     # Пробуем взять последние ~40 сообщений
-    hist = await fetch_channel_history("@vcnews", limit=40)
+    hist = await fetch_channel_history("@vcnews", limit=5)
     if not hist:
         # Если не получилось прочитать (или канал пуст), пропускаем
         await call.message.edit_text(
@@ -198,7 +198,7 @@ async def add_channel_from_forward(message: Message, state: FSMContext):
             "Возможно, канал приватный.\n"
         )
 
-    # Пробуем прочитать последние ~100 сообщений
+    # # Пробуем прочитать последние ~100 сообщений
     # hist = await fetch_channel_history(f"@{channel_username}", limit=100)
     # if not hist:
     #     await message.answer(
@@ -218,8 +218,8 @@ async def add_channel_from_forward(message: Message, state: FSMContext):
     # if not last_24h_msgs:
     #     await message.answer("Кажется, за последние сутки в этом канале нет новых сообщений.")
     #     return
-
-    # Сохраняем в Post, привязываем к user.id
+    #
+    # # Сохраняем в Post, привязываем к user.id
     # async with async_session() as session:
     #     for (dt, txt_, link_) in last_24h_msgs:
     #         new_post = Post(
@@ -231,8 +231,8 @@ async def add_channel_from_forward(message: Message, state: FSMContext):
     #         )
     #         session.add(new_post)
     #     await session.commit()
-
-    # Генерируем саммари по последним постам
+    #
+    # # Генерируем саммари по последним постам
     # posts_for_gpt = []
     # for (dt, txt_, link_) in last_24h_msgs:
     #     posts_for_gpt.append({
