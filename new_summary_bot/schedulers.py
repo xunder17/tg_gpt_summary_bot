@@ -9,6 +9,7 @@ from services.gpt_summary import generate_summary
 import pytz
 import logging
 from aiogram.client.default import DefaultBotProperties
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,6 @@ async def daily_summary_job():
                 user_mm = int(mm_str)
             except:
                 continue
-
             # Прибавляем offset (если user_offset = +3, значит локальное время +3 к UTC)
             # Для упрощения допустим offset — целое число часов
             user_local_time_now = now_utc + timedelta(hours=user.user_offset)
@@ -51,6 +51,7 @@ async def daily_summary_job():
                     # Переводим last_sent_utc -> локальное
                     last_sent_local = last_sent_utc + timedelta(hours=user.user_offset)
                     if (last_sent_local.date() == user_local_time_now.date()):
+                        await bot.send_message(user.telegram_id, "Сегодня саммари уже было отправлено!")
                         continue  # уже отправляли сегодня
 
                 # Собираем посты за сутки
@@ -62,6 +63,7 @@ async def daily_summary_job():
                     )
                 )).scalars().all()
                 if not posts:
+                    await bot.send_message(user.telegram_id, "Сегодня саммари уже было отправлено!")
                     continue
 
                 posts_for_gpt = []
@@ -98,9 +100,11 @@ async def daily_summary_job():
                     logger.info(f"Отправлен дайджест пользователю {user.telegram_id}")
                 except Exception as e:
                     logger.error(f"Ошибка при отправке дайджеста user {user.telegram_id}: {e}")
-
         await session.commit()
+scheduler = AsyncIOScheduler()
 
-def setup_scheduler():
+def setup_scheduler(loop):
+    scheduler.configure(event_loop=loop)
     scheduler.add_job(daily_summary_job, "cron", minute="*")
     scheduler.start()
+

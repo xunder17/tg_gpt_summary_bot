@@ -75,7 +75,7 @@ async def generate_summary(posts, user_themes=None, retries=3):
     if user_themes:
         prompt_parts.append(f"Пользователь указал интересующие темы: {', '.join(user_themes)}.")
 
-    for idx, cluster_indices in enumerate(clusters[:10], start=1):
+    for idx, cluster_indices in enumerate(clusters, start=1):
         prompt_parts.append(f"\n🧩 Кластер {idx}:")
         for i in cluster_indices:
             post = truncated_posts[i]

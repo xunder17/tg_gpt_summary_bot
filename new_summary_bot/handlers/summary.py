@@ -43,7 +43,7 @@ async def cmd_summary(message: Message, state: FSMContext):
         messages = await fetch_channel_history(c.channel_tag, limit=50)
         channel_username = c.channel_tag.replace("@", "")
 
-        for p in messages:
+        for p in messages[:4]:
             link = f"https://t.me/{channel_username}/{p.id}"
             posts_for_gpt.append({
                 "channel": c,
